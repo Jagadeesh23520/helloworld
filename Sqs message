@@ -1,0 +1,132 @@
+Perfect 👍 let’s break down your SQS listener config line by line.
+You’ve set these values:
+
+sqs.config.max.message: 10
+sqs.config.max.poolsize: 5
+sqs.config.wait.timeout: 3
+sqs.config.core.poolsize: 3
+sqs.config.queue.capacity: 5
+
+
+---
+
+🔹 1. sqs.config.max.message: 10
+
+This means your listener can fetch up to 10 messages in a single poll from SQS.
+
+AWS SQS ReceiveMessage API allows 1–10 messages per call.
+
+✅ More messages per poll = fewer network calls → faster throughput.
+
+⚠️ But it also means more tasks land in your executor at once.
+
+
+
+---
+
+🔹 2. sqs.config.core.poolsize: 3
+
+At least 3 threads will always be alive to process messages.
+
+First 3 messages → immediately processed in parallel.
+
+These threads stay alive even if idle.
+
+
+
+---
+
+🔹 3. sqs.config.max.poolsize: 5
+
+At most 5 threads can process messages simultaneously.
+
+If 10 messages arrive:
+
+First 3 → taken by core threads.
+
+Next go to queue.
+
+If queue fills, extra threads (up to 5 total) get created.
+
+
+
+
+---
+
+🔹 4. sqs.config.queue.capacity: 5
+
+Executor can hold 5 waiting tasks while threads are busy.
+
+Example:
+
+10 messages polled.
+
+3 threads busy.
+
+5 messages queued.
+
+2 extra threads (beyond core) start → total 5 running.
+
+If 11th message arrives while all 5 busy and queue full → it’s rejected → SQS will re-deliver later (after visibility timeout).
+
+
+
+
+---
+
+🔹 5. sqs.config.wait.timeout: 3
+
+This is the long polling wait time (seconds).
+
+The listener waits up to 3 seconds for messages before returning.
+
+If no messages arrive → empty response.
+
+Longer wait (e.g., 10–20s) = fewer empty polls = cost efficient.
+
+Short wait (3s) = faster “wake up”, but can waste API calls if traffic is low.
+
+
+
+---
+
+🔹 6. End-to-End Example (Your Config)
+
+Poll SQS → get 10 messages.
+
+Processing starts:
+
+3 messages → immediately processed by core threads.
+
+5 messages → held in queue.
+
+2 more messages → new threads created (up to maxPoolSize = 5).
+
+
+Now all 10 are in flight (3+2 running, 5 queued).
+
+If more messages arrive before any finish → they’ll wait until threads free up or visibility timeout expires → then redelivered by SQS.
+
+
+
+---
+
+✅ Summary of Your Config
+
+Parallelism: up to 5 messages processed at once.
+
+Backlog buffer: 5 waiting messages max.
+
+Batch fetch: 10 messages per poll.
+
+Polling: listener waits 3s for new messages per poll.
+
+
+
+---
+
+👉 With this setup, throughput = ~5 messages * (your DB query time).
+Since you said one message takes 10s in DB, maximum sustained throughput is ~30 messages per minute (5 parallel / 10s each).
+
+⚡ Question for you: Do you want me to suggest an optimal config (pool, queue, max messages) for your case where DB takes ~10s per request, so you avoid backlog & deadlocks?
+
