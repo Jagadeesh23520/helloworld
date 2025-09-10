@@ -1,0 +1,149 @@
+Perfect 👍 let’s design an optimal config for your use case.
+
+
+---
+
+🔹 Your Situation Recap
+
+Message sources:
+
+Core queue → steady traffic (e.g., 11 messages).
+
+On-demand queue → bursts (e.g., 20+ messages suddenly).
+
+
+Message processing time: ~10s per SQL query.
+
+Problem: With current config (queueCapacity=5), only core threads (3) are used → backlog builds, maxPoolSize ignored.
+
+
+
+---
+
+🔹 Goals
+
+1. Use maxPoolSize effectively → scale threads when burst happens.
+
+
+2. Don’t overload DB → too many threads will hammer the datasource.
+
+
+3. Keep priority isolation → priority queue must not be delayed by normal queue.
+
+
+
+
+---
+
+🔹 Recommended Config
+
+For priority executor
+
+priority.executor:
+  core-pool-size: 5        # steady 5 threads always ready
+  max-pool-size: 10        # can burst up to 10 threads
+  queue-capacity: 0        # force maxPoolSize to be used (no big backlog)
+
+👉 Why?
+
+Priority queue is critical → give it more steady threads.
+
+Queue = 0 ensures messages either get a thread or scale up to maxPoolSize.
+
+Prevents backlog starvation.
+
+
+
+---
+
+For normal executor
+
+normal.executor:
+  core-pool-size: 3        # small baseline
+  max-pool-size: 6         # can scale a bit on burst
+  queue-capacity: 5        # allow some buffering for non-priority
+
+👉 Why?
+
+Non-priority can afford to wait.
+
+Small queue keeps system stable without flooding DB.
+
+Scaling allowed but capped lower than priority.
+
+
+
+---
+
+SQS Listener Config
+
+sqs.config:
+  max.message: 5       # fetch 5 per poll
+  wait.timeout: 10     # use long polling (reduce empty polls, cost-efficient)
+
+
+---
+
+🔹 How This Works in Your Scenario
+
+Core messages (11):
+
+Priority pool instantly takes 5 threads.
+
+Next messages → trigger extra threads up to 10 (no queue delay).
+
+So ~10 messages processed in parallel → ~10s for all.
+
+
+On-demand messages (20 after 5s):
+
+Normal pool starts with 3 threads.
+
+Bursts up to 6 threads if queue fills.
+
+Some messages will wait in small queue but won’t flood DB.
+
+
+
+👉 Net effect:
+
+Priority finishes first (up to 10 parallel).
+
+Normal handled steadily without starving DB.
+
+Both pools independent, so priority is never blocked by normal.
+
+
+
+---
+
+🔹 Throughput Math (with ~10s DB time)
+
+Priority pool = 10 threads → 10 msgs / 10s = ~60/minute.
+
+Normal pool = 6 threads → 6 msgs / 10s = ~36/minute.
+
+Combined capacity = ~96 msgs/minute.
+
+
+This is scalable without deadlock or backlog explosion.
+
+
+---
+
+✅ Final Summary
+
+Use small or zero queueCapacity for priority → ensures maxPoolSize is effective.
+
+Use limited scaling + small queue for normal → smooths bursts but protects DB.
+
+Increase wait.timeout (long polling) to reduce API calls.
+
+Balance corePoolSize & maxPoolSize based on DB throughput, not just SQS.
+
+
+
+---
+
+👉 Do you also want me to give you a Spring Boot bean configuration (Java code) for these two executors, so you can plug it directly into your project?
+
