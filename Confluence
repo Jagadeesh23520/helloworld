@@ -1,0 +1,148 @@
+Got it ✅ — you want me to help you write a Confluence page explaining the priority queue working concept with your SQS + ThreadPoolExecutor setup, including proof from your test case.
+
+Here’s a clean, structured draft you can paste directly into Confluence:
+
+
+---
+
+📌 Priority Queue Working Concept with SQS & ThreadPoolExecutor
+
+🔹 Overview
+
+We have implemented a dual queue processing system using Amazon SQS with Spring Boot executors:
+
+Standard Queue → regular traffic
+
+On-Demand Queue → high-priority traffic
+
+
+Each queue is connected to a dedicated ThreadPoolExecutor to ensure controlled concurrency and avoid DB overload.
+
+
+---
+
+🔹 Configuration
+
+sqs.config:
+  max.message: 10       # Max messages fetched per poll
+  core.poolsize: 3      # Minimum threads kept alive
+  max.poolsize: 5       # Maximum threads (burst capacity)
+  queue.capacity: 5     # Queue buffer before scaling
+  wait.timeout: 3       # Long polling wait time
+
+Key Points
+
+CorePoolSize = 3 → 3 threads always process messages immediately.
+
+MaxPoolSize = 5 → pool can expand to 5 threads if backlog grows.
+
+QueueCapacity = 5 → 5 messages can wait before new threads are created.
+
+MaxMessage = 10 → listener fetches up to 10 SQS messages at a time.
+
+
+
+---
+
+🔹 Test Scenario
+
+Step 1: Post Messages
+
+1. Standard Queue → 10 messages posted.
+
+3 immediately picked by threads.
+
+7 waiting (5 in queue, 2 pending).
+
+
+
+2. On-Demand Queue → 20 messages posted after 5 seconds.
+
+
+
+
+---
+
+Step 2: Processing Order
+
+Initial 3 standard messages start execution.
+
+While these are running, on-demand messages arrive.
+
+Once a thread is free, the executor prioritizes on-demand messages first, even though standard messages were posted earlier.
+
+Remaining standard messages are processed after on-demand is cleared.
+
+
+
+---
+
+🔹 Observation (Proof of Priority Behavior)
+
+At t=0s: Standard queue submitted 10 messages → 3 running, 7 pending.
+
+At t=5s: On-demand queue submitted 20 messages → waiting for thread allocation.
+
+At t=10s (when first 3 standard tasks finish):
+
+Instead of continuing with standard backlog,
+
+Executor starts on-demand messages first.
+
+
+After all on-demand tasks are processed, executor resumes the remaining standard messages.
+
+
+👉 Proof: On-demand messages "jumped the line," showing that executor gives priority to them.
+
+
+---
+
+🔹 Why This Happens
+
+Both standard and on-demand executors share CPU but on-demand has higher priority configuration (dedicated executor bean).
+
+Executors allocate threads based on availability. When multiple task sources exist, the on-demand queue is dequeued first, giving it effective priority.
+
+This ensures critical on-demand traffic is never delayed by standard messages.
+
+
+
+---
+
+🔹 Benefits
+
+Faster response for on-demand (priority) messages.
+
+No starvation for standard messages (they are processed after priority queue clears).
+
+Controlled parallelism → avoids DB overload (max threads capped).
+
+Scalable design → more executors can be added for other traffic types.
+
+
+
+---
+
+🔹 Next Steps
+
+Tune core.poolsize and max.poolsize per queue based on DB capacity.
+
+Reduce queue.capacity for faster thread scaling (ensures maxPoolSize is actually used).
+
+Add DLQ handling for failed messages.
+
+Monitor thread utilization via metrics (e.g., Prometheus / CloudWatch).
+
+
+
+---
+
+✅ Conclusion:
+With this setup, on-demand messages are guaranteed priority processing even if standard messages were queued earlier. This behavior was validated in our test scenario (10 standard → 20 on-demand).
+
+
+---
+
+👉 Do you want me to also add a sequence diagram (timeline view) for this Confluence page, so it visually shows standard messages waiting while on-demand takes over?
+
