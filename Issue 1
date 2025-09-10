@@ -1,0 +1,143 @@
+Ah 🔥 you’ve described the classic confusion with ThreadPoolExecutor behavior.
+Let’s carefully unpack why you saw that maxPoolSize did not kick in when you expected.
+
+
+---
+
+🔹 Your Config Recap
+
+sqs.config.max.message = 5
+sqs.config.core.poolsize = 3
+sqs.config.max.poolsize = 5
+sqs.config.queue.capacity = 5
+sqs.config.wait.timeout = 3
+
+Core threads: 3
+
+Extra threads (max): 2 more possible
+
+Queue size: 5
+
+Batch poll size: 5 messages at once
+
+
+
+---
+
+🔹 What Happened in Your Scenario
+
+1. Step 1 — Core messages posted (11 messages)
+
+First 3 → run immediately on 3 core threads.
+
+Next 5 → go into the queue (queue has room).
+
+Remaining 3 (total 11 − 3 − 5 = 3) → queue now full, so new threads should be created (up to maxPoolSize = 5).
+
+
+
+
+👉 But you observed that new threads did not start, and only 3 kept running.
+
+
+---
+
+2. Step 2 — On-demand messages posted (20 messages)
+
+Executor still sees queue has tasks waiting.
+
+By default, ThreadPoolExecutor prefers queueing over growing threads.
+
+So instead of using maxPoolSize, it keeps filling the queue.
+
+Only when both:
+
+corePoolSize threads are busy AND
+
+queue is completely full,
+
+then and only then → pool grows beyond core.
+
+
+
+
+
+
+---
+
+🔹 Why Your Threads Didn’t Grow
+
+In Spring’s ThreadPoolTaskExecutor, the queue used is typically a LinkedBlockingQueue (unbounded by default, but you set queueCapacity=5).
+
+Even with bounded queues, the executor’s default policy is:
+
+
+> Always fill the queue before creating new threads beyond corePoolSize.
+
+
+
+So:
+
+As long as queue has space, maxPoolSize is ignored.
+
+That’s why all 20 on-demand messages + remaining core messages just waited.
+
+
+
+---
+
+🔹 Visualizing With Your Numbers
+
+Core: 3 running
+
+Queue capacity: 5 → filled quickly
+
+Remaining tasks: get stuck in queueing instead of scaling to 5 threads
+
+
+So effectively:
+
+Only 3 threads are actively working most of the time.
+
+maxPoolSize is sitting unused.
+
+
+
+---
+
+🔹 ⚡ Solution: Force MaxPoolSize to Work
+
+If you want maxPoolSize threads to actually get used:
+
+1. Set small queueCapacity (0 or 1)
+
+Forces the executor to create threads instead of just queueing.
+
+
+sqs.config.queue.capacity: 0
+
+
+2. Use CallerRunsPolicy / Custom Rejection Handler
+
+When queue fills, you can push back to the caller or fail fast.
+
+
+
+3. Tune max.message carefully
+
+If you fetch 5 at a time but can only process 3 concurrently, 2 always wait.
+
+
+
+
+
+---
+
+✅ Answer in one line:
+Your maxPoolSize was not used because ThreadPoolExecutor always prefers queueing tasks over creating new threads; with queueCapacity=5, it happily queued tasks instead of growing beyond 3 core threads. If you want to actually use maxPoolSize=5, reduce queueCapacity to 0–1.
+
+
+---
+
+👉 Do you want me to suggest an optimal configuration for your case (11 core + 20 on-demand messages, DB taking 10s each), so priority/on-demand both get fair thread allocation?
+
