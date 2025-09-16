@@ -1,0 +1,60 @@
+<mxfile>
+  <diagram name="Single Report Flow" id="single-report">
+    <mxGraphModel dx="1190" dy="675" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Start -->
+        <mxCell id="start" value="Message in SQS (No systemReportID, No Aggregate)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" vertex="1" parent="1">
+          <mxGeometry x="50" y="40" width="260" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Dedup Check -->
+        <mxCell id="checkLog" value="Check RPT_GEN_LOG for duplicates (userUID)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;" vertex="1" parent="1">
+          <mxGeometry x="50" y="140" width="260" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Split Accounts -->
+        <mxCell id="splitAcc" value="Split Account Numbers (chunks of 10)" style="rectangle;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;" vertex="1" parent="1">
+          <mxGeometry x="50" y="260" width="260" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Post SQS -->
+        <mxCell id="postSQS" value="Post sub-requests to request_queue (systemReportID, status=P)" style="rectangle;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;" vertex="1" parent="1">
+          <mxGeometry x="50" y="360" width="260" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Store Log -->
+        <mxCell id="storeLog" value="Insert RPT_GEN_LOG with systemReportID, status=P" style="rectangle;whiteSpace=wrap;html=1;fillColor=#FFD7D7;strokeColor=#B85450;" vertex="1" parent="1">
+          <mxGeometry x="50" y="480" width="260" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Process Message -->
+        <mxCell id="procMsg" value="Message in SQS (With systemReportID)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" vertex="1" parent="1">
+          <mxGeometry x="400" y="40" width="260" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Generate Report -->
+        <mxCell id="genReport" value="Generate Report → Store in S3" style="rectangle;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;" vertex="1" parent="1">
+          <mxGeometry x="400" y="140" width="260" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Report Metadata -->
+        <mxCell id="meta" value="Insert ReportMetaData (systemReportID, S3 URL...)" style="rectangle;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;" vertex="1" parent="1">
+          <mxGeometry x="400" y="240" width="260" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- SNS -->
+        <mxCell id="sns" value="Publish to SNS → core-response-queue" style="rectangle;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;" vertex="1" parent="1">
+          <mxGeometry x="400" y="360" width="260" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Update Log -->
+        <mxCell id="updateLog" value="Update RPT_GEN_LOG: P → S" style="rectangle;whiteSpace=wrap;html=1;fillColor=#FFD7D7;strokeColor=#B85450;" vertex="1" parent="1">
+          <mxGeometry x="400" y="460" width="260" height="60" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
