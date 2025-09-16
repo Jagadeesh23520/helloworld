@@ -1,0 +1,244 @@
+Perfect 👍 — I’ll extend the Confluence page I gave you earlier and add this SFTP Aggregated Report flow so both flows (Single Report + Aggregated Report) are documented in one place.
+
+Here’s the combined draft:
+
+
+---
+
+Bank Report Generation Flows
+
+Introduction
+
+This document describes the technical design and flow for generating Bank Reports triggered from SQS messages.
+
+Two report generation types are covered:
+
+1. Single Report Flow – account-based, triggered without isAggregate flag.
+
+
+2. SFTP Aggregated Report Flow – delivery-preference-based, triggered with isAggregate flag.
+
+
+
+Both flows ensure duplicate prevention, status tracking, and downstream notification.
+
+
+---
+
+Technical Design
+
+Deduplication handled by RPT_GEN_LOG.
+
+SQS Queue used for asynchronous request handling.
+
+SystemReportID uniquely identifies sub-reports.
+
+Status Tracking via RPT_GEN_LOG (Pending → Success).
+
+S3 used for report storage.
+
+SNS + core-response-queue used for downstream notification.
+
+SFTP specifically used for aggregated reports.
+
+
+
+---
+
+Components Involved
+
+AWS SQS Queues
+
+request_queue → Input requests (single & aggregated).
+
+core-response-queue → Downstream consumer queue.
+
+
+AWS SNS
+
+Publishes report metadata to subscribers.
+
+
+AWS S3
+
+Stores final reports (single + aggregated).
+
+
+SFTP
+
+Upload destination for aggregated reports.
+
+
+Database Tables
+
+RPT_GEN_LOG → Tracks lifecycle and prevents duplicates.
+
+ReportMetaData → Stores report details, preferences, and S3 location.
+
+
+DeliveryPreference REST Client
+
+Provides account delivery preference list for aggregated reports.
+
+
+
+
+---
+
+Process Flow
+
+1. Single Report Flow (Without isAggregate)
+
+Initial Message (Without systemReportID)
+
+1. Check RPT_GEN_LOG for duplicates (userUID = processField + reportType).
+
+
+2. If duplicate → skip.
+
+
+3. Fetch account list based on processField.
+
+
+4. Split accounts into chunks of 10.
+
+
+5. For each chunk:
+
+Generate systemReportID.
+
+Post sub-request to request_queue with systemReportID, userUID, status = P.
+
+Insert entry into RPT_GEN_LOG.
+
+
+
+6. Post an aggregate report request by setting:
+
+isAggregate = true
+
+systemReportID = null.
+
+
+
+
+Processing Message (With systemReportID)
+
+1. Check RPT_GEN_LOG for systemReportID.
+
+If status ≠ P → skip.
+
+
+
+2. Generate report and store in S3.
+
+
+3. Insert metadata in ReportMetaData.
+
+
+4. Publish metadata to SNS → core-response-queue.
+
+
+5. Update RPT_GEN_LOG status P → S.
+
+
+
+
+---
+
+2. SFTP Aggregated Report Flow (With isAggregate Flag)
+
+Initial Message (Without systemReportID, with isAggregate = true)
+
+1. Check RPT_GEN_LOG for duplicates (userUID = processField + reportType + Aggregated).
+
+
+2. If duplicate → skip.
+
+
+3. Call DeliveryPreference REST Client to get delivery preference list.
+
+
+4. Deduplicate list and filter only valid accountNumbers.
+
+
+5. Split delivery preferences into chunks of 10.
+
+Add isAggregate = true in payload.
+
+Remove accountList from payload.
+
+
+
+6. For each chunk:
+
+Generate systemReportID.
+
+Post sub-request to request_queue with systemReportID, userUID, isAggregate, status = P.
+
+Insert entry into RPT_GEN_LOG.
+
+
+
+
+Processing Message (With systemReportID, isAggregate = true)
+
+1. Check RPT_GEN_LOG for systemReportID.
+
+If status ≠ P → skip.
+
+
+
+2. Generate aggregated report and store in S3.
+
+Note: Upload to SFTP if required by business rules.
+
+
+
+3. Insert metadata into ReportMetaData:
+
+systemReportID, accountNumber = null, reportType, date, s3Loc, processField, status (0,1), preferenceID.
+
+
+
+4. Publish metadata to SNS → core-response-queue.
+
+
+5. Update RPT_GEN_LOG status P → S.
+
+
+
+
+---
+
+Impacted Tables and Purpose
+
+Table Name	Purpose
+
+RPT_GEN_LOG	Tracks request lifecycle, prevents duplicate reports, stores status (P, S).
+ReportMetaData	Stores final report metadata including S3 URL, preference ID (for aggregate), and status.
+
+
+
+---
+
+External Calls
+
+AWS SQS → Request orchestration.
+
+AWS SNS → Report distribution.
+
+AWS S3 → Report storage.
+
+SFTP → Aggregated report uploads.
+
+DeliveryPreference REST API → Provides customer delivery preferences.
+
+
+
+---
+
+⚡ Recommendation: Adding flow diagrams (sequence + system architecture) will make this Confluence page much easier to explain during reviews or interviews.
+
+Do you want me to create one combined flow diagram for both (single + aggregate) or keep them as separate diagrams?
+
