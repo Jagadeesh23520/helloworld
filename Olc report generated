@@ -1,0 +1,226 @@
+Here’s a structured draft you can use for your Confluence page. I’ve organized it under the sections you asked for and left placeholders where you might want to add more detail later.
+
+
+---
+
+Bank Single Report Generation Flow
+
+Introduction
+
+This document describes the end-to-end process of generating a single report when a message is received in the SQS queue.
+The flow includes identifying duplicate requests, splitting account numbers, posting sub-requests to SQS, generating reports, storing outputs in S3, updating logs, and notifying downstream systems.
+
+
+---
+
+Technical Design
+
+The design ensures idempotent report generation using RPT_GEN_LOG as the controlling table.
+It handles both the initial request flow (without systemReportID) and the processing flow (with systemReportID).
+
+The design includes:
+
+Validation of duplicate requests.
+
+Splitting large account lists into smaller request batches.
+
+Tracking of request and processing statuses.
+
+Report generation and storage in S3.
+
+Notification to downstream systems via SNS and response queues.
+
+
+
+---
+
+Components Involved
+
+AWS SQS Queues
+
+request_queue → Receives incoming requests and sub-requests.
+
+core-response-queue → Receives final report details via SNS.
+
+
+AWS SNS
+
+Publishes generated report details to subscribed consumers.
+
+
+AWS S3
+
+Stores the generated reports and provides report URLs.
+
+
+Database Tables
+
+RPT_GEN_LOG → Tracks report generation lifecycle and prevents duplicates.
+
+ReportMetaData → Stores generated report details and S3 locations.
+
+
+SFTP
+
+Used for aggregated reports in Step 6 of the first flow.
+
+
+
+
+---
+
+Process Flow
+
+Phase 1 – Initial Message (Without systemReportID)
+
+1. Check for duplicates
+
+Verify in RPT_GEN_LOG if the request (based on userUID = processFiled + reportType) already exists.
+
+If exists → Skip and exit.
+
+
+
+2. Split accounts
+
+Retrieve accountNumber list for the processFiled.
+
+Split into chunks of 10 accounts each.
+
+
+
+3. Post sub-requests
+
+For each chunk:
+
+Generate a new systemReportID.
+
+Post sub-request to request_queue with:
+
+systemReportID
+
+userUID (processFiled + reportType)
+
+Status = P
+
+
+
+
+
+4. Log request
+
+Insert record in RPT_GEN_LOG with:
+
+systemReportID
+
+userUID
+
+Status = P
+
+
+
+
+5. SFTP Aggregated Report
+
+Update reportParams → isAggregate = true and systemReportID = null.
+
+Post request for aggregated report to request_queue.
+
+
+
+
+
+---
+
+Phase 2 – Processing Message (With systemReportID)
+
+1. Validate processing state
+
+Check RPT_GEN_LOG for systemReportID.
+
+If status = P → Continue.
+
+Else → Skip and exit.
+
+
+
+2. Generate report
+
+Create the report for given accountNumbers.
+
+Store in S3.
+
+Capture the S3 URL.
+
+
+
+3. Update metadata
+
+Insert record into ReportMetaData with:
+
+systemReportID, accountNumber, reportType, date, s3Loc, processFiled, status (0,1).
+
+
+
+
+4. Notify downstream
+
+Publish metadata to SNS, which redirects to core-response-queue.
+
+
+
+5. Update log status
+
+Update RPT_GEN_LOG status from P → S.
+
+
+
+
+
+---
+
+Impacted Tables and Purpose
+
+RPT_GEN_LOG
+
+Prevents duplicate report requests.
+
+Tracks lifecycle of each systemReportID.
+
+Status values:
+
+P → Pending.
+
+S → Success.
+
+
+
+ReportMetaData
+
+Stores metadata of generated reports.
+
+Contains S3 location and account-specific details.
+
+Acts as a reference for audit and downstream usage.
+
+
+
+
+---
+
+External Calls
+
+AWS SQS → Request and response handling.
+
+AWS SNS → Downstream notification.
+
+AWS S3 → Report storage and retrieval.
+
+SFTP → Aggregated report uploads.
+
+
+
+---
+
+👉 Would you like me to also add a diagram (sequence or flowchart) for this process flow? It would make the Confluence page more visual and interview-friendly.
+
