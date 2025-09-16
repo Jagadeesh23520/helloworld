@@ -1,0 +1,70 @@
+<mxfile>
+  <diagram name="SFTP Aggregated Report Flow" id="aggregated-report">
+    <mxGraphModel dx="1190" dy="675" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Start -->
+        <mxCell id="startAgg" value="Message in SQS (No systemReportID, isAggregate=true)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" vertex="1" parent="1">
+          <mxGeometry x="50" y="40" width="300" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Dedup Check -->
+        <mxCell id="checkLogAgg" value="Check RPT_GEN_LOG (userUID = processField+reportType+Aggregated)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;" vertex="1" parent="1">
+          <mxGeometry x="50" y="140" width="300" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Call DeliveryPref -->
+        <mxCell id="callPref" value="Call DeliveryPreference REST API → get list" style="rectangle;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;" vertex="1" parent="1">
+          <mxGeometry x="50" y="260" width="300" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Deduplicate -->
+        <mxCell id="dedup" value="Deduplicate & Validate accountNumbers" style="rectangle;whiteSpace=wrap;html=1;fillColor=#FFD7D7;strokeColor=#B85450;" vertex="1" parent="1">
+          <mxGeometry x="50" y="340" width="300" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Split Pref -->
+        <mxCell id="splitPref" value="Split preferences into chunks of 10 (isAggregate flag ON, remove accountList)" style="rectangle;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;" vertex="1" parent="1">
+          <mxGeometry x="50" y="420" width="300" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Post SQS -->
+        <mxCell id="postAgg" value="Post sub-requests → request_queue (systemReportID, userUID, status=P)" style="rectangle;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;" vertex="1" parent="1">
+          <mxGeometry x="50" y="520" width="300" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Store Log -->
+        <mxCell id="logAgg" value="Insert RPT_GEN_LOG (systemReportID, userUID, status=P)" style="rectangle;whiteSpace=wrap;html=1;fillColor=#FFD7D7;strokeColor=#B85450;" vertex="1" parent="1">
+          <mxGeometry x="50" y="620" width="300" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Process Message -->
+        <mxCell id="procAgg" value="Message in SQS (With systemReportID, isAggregate=true)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;" vertex="1" parent="1">
+          <mxGeometry x="450" y="40" width="300" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Generate Agg Report -->
+        <mxCell id="genAgg" value="Generate Aggregated Report → Store in S3 / SFTP" style="rectangle;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;" vertex="1" parent="1">
+          <mxGeometry x="450" y="140" width="300" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Metadata -->
+        <mxCell id="metaAgg" value="Insert ReportMetaData (systemReportID, null accountNumber, preferenceID...)" style="rectangle;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;" vertex="1" parent="1">
+          <mxGeometry x="450" y="240" width="300" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- SNS -->
+        <mxCell id="snsAgg" value="Publish to SNS → core-response-queue" style="rectangle;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;" vertex="1" parent="1">
+          <mxGeometry x="450" y="360" width="300" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Update Log -->
+        <mxCell id="updateAgg" value="Update RPT_GEN_LOG: P → S" style="rectangle;whiteSpace=wrap;html=1;fillColor=#FFD7D7;strokeColor=#B85450;" vertex="1" parent="1">
+          <mxGeometry x="450" y="460" width="300" height="60" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
