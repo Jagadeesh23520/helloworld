@@ -1,0 +1,136 @@
+Got it 👍
+You’re showing a fluent builder style for creating an SqsMessageListenerContainerFactory.
+Let me break down each of the options in your snippet so it’s crystal clear what they mean.
+
+
+---
+
+📌 Example Code (from your snippet, cleaned up)
+
+@Bean
+public SqsMessageListenerContainerFactory<Object> customSqsListenerContainerFactory() {
+    return SqsMessageListenerContainerFactory
+            .builder()
+            .sqsAsyncClient(sqsAsyncClient()) // Amazon SQS client
+            .configure(options -> options
+                .maxConcurrentMessages(maxConcurrency)      // 1️⃣
+                .maxMessagesPerPoll(maxNumberOfMessages)    // 2️⃣
+                .messageVisibility(Duration.ofMinutes(visibilityTimeout)) // 3️⃣
+                .maxDelayBetweenPolls(Duration.ofSeconds(delayBetweenPolls)) // 4️⃣
+                .pollTimeout(Duration.ofSeconds(pollTimeout)) // 5️⃣
+            )
+            .build();
+}
+
+
+---
+
+🔑 Explanation of Each Option
+
+1️⃣ maxConcurrentMessages(maxConcurrency)
+
+Maximum number of messages being processed in parallel across threads.
+
+Example:
+
+If maxConcurrentMessages = 50, up to 50 messages can be handled at once.
+
+Good for scaling throughput.
+
+
+
+
+---
+
+2️⃣ maxMessagesPerPoll(maxNumberOfMessages)
+
+Number of messages requested per poll from SQS.
+
+AWS SQS allows 1–10 messages per request.
+
+Example:
+
+If set to 10, each poll can fetch up to 10 messages at once.
+
+Improves efficiency (fewer network calls).
+
+
+
+
+---
+
+3️⃣ messageVisibility(Duration.ofMinutes(x))
+
+Configures the visibility timeout of messages.
+
+After a message is polled, it becomes invisible for this duration.
+
+If not acknowledged/deleted within this time, the message reappears.
+
+Example:
+
+messageVisibility(Duration.ofMinutes(5)) → Message becomes visible again after 5 minutes if not processed.
+
+
+
+
+---
+
+4️⃣ maxDelayBetweenPolls(Duration.ofSeconds(x))
+
+Maximum delay when polling continuously.
+
+Used when there are no messages available, to avoid tight loops and reduce cost.
+
+Example:
+
+maxDelayBetweenPolls(Duration.ofSeconds(10)) → Wait up to 10s before polling again.
+
+
+
+
+---
+
+5️⃣ pollTimeout(Duration.ofSeconds(x))
+
+How long each poll waits for messages before returning empty.
+
+Enables long polling (recommended to save cost).
+
+Example:
+
+pollTimeout(Duration.ofSeconds(20)) → Poll request blocks up to 20 seconds.
+
+
+
+
+---
+
+⚡ How They Work Together
+
+maxConcurrentMessages → controls parallel processing power.
+
+maxMessagesPerPoll → controls batch size per request.
+
+pollTimeout + maxDelayBetweenPolls → control polling efficiency & cost.
+
+messageVisibility → ensures messages won’t be re-delivered too soon if still processing.
+
+
+
+---
+
+✅ With this configuration you can balance:
+
+Throughput → increase concurrency & batch size
+
+Cost → use long polling + delay between polls
+
+Reliability → tune visibility timeout properly
+
+
+
+---
+
+Do you want me to also draw a timeline diagram showing how pollTimeout, maxDelayBetweenPolls, and messageVisibility interact during message fetching and processing?
+
