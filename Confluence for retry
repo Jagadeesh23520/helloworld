@@ -1,0 +1,55 @@
+h1. How to Re-Generate Old Stuck Reports from Database
+h2. Overview This document describes the steps to re-generate old stuck reports whose status is I (In-Progress) or P (Pending) in the database.
+The process includes database cleanup, optional API invocation, SQS reprocessing, and report regeneration.
+h2. Pre-Requisites
+Database access to inforeport schema
+API access (Postman or equivalent)
+Access to SQS queue
+Knowledge of processFileId, recordType, and USER_UID
+h2. Step 1: Invoke Re-Generate API (Optional) If required, invoke the reprocessing API via Postman to initiate the report regeneration flow.
+This API fetches old stuck records
+Triggers downstream processing logic
+h2. Step 2: Fetch Old Stuck Reports from DB Fetch reports with status I or P.
+{code:sql} SELECT * FROM inforeport.RPT_GEN_LOG WHERE source = 'core' AND status IN ('I', 'P') AND meta_data IS NULL GROUP BY user_uid LIMIT 10; {code}
+Limit value can be 5 or 10
+Limit can be controlled via query parameter
+Query can be extended to filter by rpt_name if required
+h2. Step 3: Iterate Records from RPT_GEN_LOG Iterate through fetched records and process them using:
+processFileId
+recordType (derived from USER_UID)
+h2. Step 4: Delete Old Stuck Records Delete existing stuck records for the selected USER_UID.
+Primary Delete Query {code:sql} DELETE FROM inforeport.RPT_GEN_LOG WHERE user_uid = '1127TOV_WA'; {code}
+h3. Alternate Delete Query (If Primary Fails) {code:sql} DELETE FROM inforeport.RPT_GEN_LOG WHERE user_uid = '1127TOV_WA' LIMIT 1; {code}
+h3. Get Record Count for Delete {code:sql} SELECT COUNT(id) FROM inforeport.RPT_GEN_LOG WHERE user_uid = '1127TOV_WA'; {code}
+Use the count value as LIMIT if required.
+h2. Step 5: Cleanup Combined Report Records (If Applicable) If the user wants to re-try combined reports, related records must also be deleted before reprocessing.
+h2. Step 6: Cleanup ReportsMetadata Table (If Required) Delete metadata entries using processFileId and reportType.
+{code:sql} DELETE FROM inforeport.ReportsMetadata WHERE ProcessedFileId = '64848' AND reportType = 'TOV_WA'; {code}
+h2. Step 7: Maintain Retry Record Ensure at least one retry record is maintained in the database with:
+processFileId
+recordType
+Retry flag/value
+This helps prevent infinite reprocessing.
+h2. Step 8: Publish Message to SQS Publish a message to the SQS queue with:
+processFileId
+recordType
+CREATED_TIME (optional but recommended)
+h2. Step 9: Queue Processing & Data Insertion
+Queue consumer processes the message
+New records are inserted with a fresh CREATED_TIME
+Old junk records are avoided
+h2. Step 10: Report Regeneration
+Reports are regenerated successfully
+Records are updated/inserted into ReportsMetadata table
+h2. Step 11: Duplicate Record Handling If old records are not fully cleaned:
+If record already exists → Skip insertion
+If record does not exist → Insert new record
+h2. Summary This process ensures:
+Safe cleanup of stuck reports
+Controlled retry mechanism
+No duplicate records
+Successful report regeneration through SQS
+h2. Notes
+Always validate record count before deletion
+Avoid bulk deletes without verification
+Prefer retries via SQS instead of manual inserts
